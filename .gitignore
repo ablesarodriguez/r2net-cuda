@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# Dataset images (download them from Zenodo, see data/README.md)
+data/*
+!data/README.md
+
+# University dossier kept local only (progress reports and change index)
+docs/reports/
+docs/index.html
+codi/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
