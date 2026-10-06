@@ -65,8 +65,8 @@ def roundtrip_wavefront_cpu(norm, block, lr, shape):
 
 
 def roundtrip_parallel_cpu(norm, block, lr, shape):
-    residual, context = compress_parallel_cpu(norm, block, lr, CONTEXT_SIZE)
-    return residual, decompress_parallel_cpu(residual, context, block, lr, CONTEXT_SIZE, original_shape=shape)
+    residual = compress_parallel_cpu(norm, block, lr, CONTEXT_SIZE)
+    return residual, decompress_parallel_cpu(residual, block, lr, CONTEXT_SIZE, original_shape=shape)
 
 
 def roundtrip_wavefront_cuda(norm, block, lr, shape):
@@ -143,13 +143,40 @@ class RoundTripMixin:
                     self.assertEqual(residual.shape, padded)
 
 
+def split_in_blocks(array, block):
+    height, width = array.shape
+    return array.reshape(height // block, block, width // block, block).transpose(0, 2, 1, 3).reshape(-1, block, block)
+
+
 class CpuCodersTest(RoundTripMixin, unittest.TestCase):
     CODERS = CPU_CODERS
+
+    def test_parallel_stores_the_context_in_dpcm(self):
+        # First row and first column of every block: the first pixel, then differences.
+        image = IMAGES['smooth, multiple of the block size']
+        _, _, norm = normalize_min_max_values(image, np.float64)
+        for block in BLOCK_SIZES:
+            with self.subTest(block=block):
+                residual = compress_parallel_cpu(norm, block, DEFAULT_LEARNING_RATE, CONTEXT_SIZE)
+                stored, pixels = split_in_blocks(residual, block), split_in_blocks(norm, block)
+                self.assertTrue(np.array_equal(stored[:, 0, 0], pixels[:, 0, 0]))
+                self.assertTrue(np.allclose(stored[:, 0, 1:], np.diff(pixels[:, 0, :], axis=1), atol=1e-15))
+                self.assertTrue(np.allclose(stored[:, 1:, 0], np.diff(pixels[:, :, 0], axis=1), atol=1e-15))
+                self.assertTrue(np.allclose(np.cumsum(stored[:, 0, :], axis=1), pixels[:, 0, :], atol=1e-12))
 
 
 @unittest.skipUnless(HAVE_GPU, 'CuPy with a CUDA GPU is required')
 class GpuCodersTest(RoundTripMixin, unittest.TestCase):
     CODERS = GPU_CODERS
+
+    def test_parallel_cpu_and_cuda_give_the_same_residual(self):
+        for image_name, image in IMAGES.items():
+            _, _, norm = normalize_min_max_values(image, np.float64)
+            for block in BLOCK_SIZES:
+                with self.subTest(image=image_name, block=block):
+                    on_cpu = compress_parallel_cpu(norm, block, DEFAULT_LEARNING_RATE, CONTEXT_SIZE)
+                    on_gpu = compress_parallel_cuda(norm, block, DEFAULT_LEARNING_RATE, CONTEXT_SIZE)
+                    self.assertTrue(np.allclose(on_cpu, on_gpu, atol=1e-9))
 
 
 if __name__ == '__main__':
