@@ -81,7 +81,10 @@ Wavefront keeps the compressibility of the sequential version, while Parallel pr
 │   ├── coder_wavefront_cuda.py   Wavefront, CuPy / CUDA
 │   ├── coder_parallel_cpu.py     Parallel, NumPy
 │   ├── coder_parallel_cuda.py    Parallel, CuPy / CUDA
-│   └── utils/                    RAW I/O, normalisation, padding, metrics
+│   └── utils/                    RAW I/O, normalisation, padding, metrics, hardware monitor
+├── tests/
+│   └── test_roundtrip.py         round-trip checks for every coder
+├── benchmark.py                  timing grid over images, coders and parameters
 ├── notebooks/
 │   ├── R2Net.ipynb               end-to-end demo: load, compress, decompress, metrics
 │   └── R2Net_Original.ipynb      reference R2-Net code on a single block
@@ -138,6 +141,24 @@ rec = decompress_wf_cpu(residual, block_size=16, learning_rate=0.5, FIXED_INPUT_
 rec = denormalize_min_max_values(rec, lo, hi)
 print_metrics(calculate_metrics(img, rec, raw["params"]["bits"]))
 ```
+
+All five coders share this interface.
+
+### Tests
+
+```bash
+python -m unittest discover tests
+```
+
+The tests compress and decompress synthetic images with every coder and check that the `float64` reconstruction is identical to the original, across block sizes and learning rates. They also check that the Parallel coder stores its context in DPCM and that its CPU and CUDA versions produce the same residual. The CUDA tests run only when CuPy and a GPU are available, so the CI of this repository covers the CPU coders.
+
+### Benchmark
+
+```bash
+python benchmark.py
+```
+
+`benchmark.py` runs the timing grid described in [Results](#results): every image, coder, block size, learning rate and context size, five timed runs after a warm-up pass. It needs the Zenodo images in `data/` and a GPU, and it writes the timings to `benchmark_complete_float32.csv` and the CPU, memory and GPU telemetry to `hardware_complete_float32.csv` (GPU telemetry needs `pynvml`). The precision is set with `DTYPE` and the grid with the lists at the bottom of the script, which can be shortened to run a subset.
 
 ## Data and references
 
