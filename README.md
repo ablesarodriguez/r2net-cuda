@@ -20,6 +20,12 @@ This project removes that bottleneck with two parallel traversal strategies, imp
 | Reconstruction in `float64` | lossless (PAE 0, MSE 0, PSNR ∞) |
 | Reconstruction in `float32` | about 2× faster, PSNR 75.87 dB |
 
+**Known limitation.** This work is about throughput, not compression ratio:
+the residuals are floating-point values and their entropy (14–48 bpp) is
+still above that of the original 8-bit image (about 7.7 bpp). Quantising the
+residual is the main line of future work; see
+[Speed has a compression cost](#speed-has-a-compression-cost).
+
 📄 Full thesis (in Catalan, with an English abstract): [docs/thesis.pdf](docs/thesis.pdf)
 
 ## How it works
