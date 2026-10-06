@@ -143,8 +143,9 @@ def compress_parallel_cpu(img, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZ
     
     #Output:
     #error_map_final: residual or error map resulting from the parallel compression.
-    #The first row and the first column of every block hold the raw context pixels
-    #instead of a residual, so the decoder needs nothing else.
+    #The first row and the first column of every block hold the context pixels in DPCM
+    #(the first pixel, then the difference with the previous one) instead of a residual,
+    #so the decoder needs nothing else. Same layout as coder_parallel_cuda.
     
     DTYPE = img.dtype
     img_padded = apply_edge_padding(img, block_size)
@@ -155,12 +156,22 @@ def compress_parallel_cpu(img, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZ
     blocks = img_padded.reshape(h // b, b, w // b, b).transpose(0, 2, 1, 3).reshape(-1, b, b)
     N = blocks.shape[0]
     
-    # 2. Raw context extraction (unquantized)
-    ctx_top = blocks[:, 0, :].copy()
-    ctx_left = blocks[:, :, 0].copy()
+    # 2. DPCM of the context: first row and first column of every block
+    top_row, left_col = blocks[:, 0, :], blocks[:, :, 0]
+    
+    dpcm_top = np.zeros_like(top_row)
+    dpcm_top[:, 0] = top_row[:, 0]
+    dpcm_top[:, 1:] = top_row[:, 1:] - top_row[:, :-1]
+    
+    dpcm_left = np.zeros_like(left_col)
+    dpcm_left[:, 0] = left_col[:, 0]
+    dpcm_left[:, 1:] = left_col[:, 1:] - left_col[:, :-1]
+    
+    # The encoder predicts from the context as the decoder will rebuild it
+    rec_top, rec_left = np.cumsum(dpcm_top, axis=1), np.cumsum(dpcm_left, axis=1)
     
     # 3. Context mapping and downsampling
-    all_pixels = np.concatenate([ctx_left, ctx_top[:, 1:]], axis=1)
+    all_pixels = np.concatenate([rec_left, rec_top[:, 1:]], axis=1)
     M, valid_groups = setup_context_mapping(b, FIXED_INPUT_SIZE, DTYPE)
     
     x_batch = np.matmul(all_pixels, M)
@@ -173,10 +184,10 @@ def compress_parallel_cpu(img, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZ
     
     error_map = (gt_batch - pred_batch).astype(DTYPE)
     
-    # Reintegrate context into the error map to maintain structure
+    # DPCM injection: the context travels inside the error map
     err_blocks = error_map.reshape(N, b, b)
-    err_blocks[:, 0, :] = ctx_top
-    err_blocks[:, :, 0] = ctx_left
+    err_blocks[:, 0, :] = dpcm_top
+    err_blocks[:, :, 0] = dpcm_left
     
     error_map_final = err_blocks.reshape(h // b, w // b, b, b).transpose(0, 2, 1, 3).reshape(h, w)
     
@@ -185,7 +196,7 @@ def compress_parallel_cpu(img, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZ
 def decompress_parallel_cpu(error_map, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZE=16, original_shape=None):
     #This function decompresses an image in parallel from its error map
     #Input arguments:
-    #error_map: stored residual map (the context pixels travel inside it)
+    #error_map: stored residual map (the context travels inside it, in DPCM)
     #block_size: processing block size
     #learning_rate: learning rate for R2Net
     #FIXED_INPUT_SIZE: context vector size
@@ -202,9 +213,9 @@ def decompress_parallel_cpu(error_map, block_size=16, learning_rate=0.5, FIXED_I
     err_blocks = error_map.reshape(h // b, b, w // b, b).transpose(0, 2, 1, 3).reshape(-1, b, b)
     N = err_blocks.shape[0]
     
-    # Raw context stored by the encoder in the first row and column of every block
-    rec_top = err_blocks[:, 0, :].copy()
-    rec_left = err_blocks[:, :, 0].copy()
+    # DPCM reconstruction of the context stored in the first row and column of every block
+    dpcm_top, dpcm_left = err_blocks[:, 0, :], err_blocks[:, :, 0]
+    rec_top, rec_left = np.cumsum(dpcm_top, axis=1), np.cumsum(dpcm_left, axis=1)
     
     # Context mapping and downsampling
     all_pixels = np.concatenate([rec_left, rec_top[:, 1:]], axis=1)
