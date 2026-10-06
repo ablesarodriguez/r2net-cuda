@@ -1,6 +1,7 @@
 numpy
 matplotlib
 jupyter
+pandas
 
 # GPU coders only (needs an NVIDIA GPU and CUDA Toolkit 12.x):
 # cupy-cuda12x
