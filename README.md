@@ -139,8 +139,6 @@ rec = denormalize_min_max_values(rec, lo, hi)
 print_metrics(calculate_metrics(img, rec, raw["params"]["bits"]))
 ```
 
-All coders share this interface except `coder_parallel_cpu`, whose `compress_parallel_cpu` returns `(residual, context)` and whose `decompress_parallel_cpu` takes that `context` as its second argument. Because of this, `MODE = 3` needs those two calls adapted in the notebook.
-
 ## Data and references
 
 - Test images: A. Blesa Rodríguez, *R2Net custom dataset*, Zenodo, 2026. [doi:10.5281/zenodo.20268850](https://zenodo.org/records/20268850)
