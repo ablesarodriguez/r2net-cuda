@@ -142,8 +142,9 @@ def compress_parallel_cpu(img, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZ
     #FIXED_INPUT_SIZE: context vector size
     
     #Output:
-    #error_map_final: residual or error map resulting from the parallel compression
-    #context_raw: tuple containing raw top and left context pixels
+    #error_map_final: residual or error map resulting from the parallel compression.
+    #The first row and the first column of every block hold the raw context pixels
+    #instead of a residual, so the decoder needs nothing else.
     
     DTYPE = img.dtype
     img_padded = apply_edge_padding(img, block_size)
@@ -179,13 +180,12 @@ def compress_parallel_cpu(img, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZ
     
     error_map_final = err_blocks.reshape(h // b, w // b, b, b).transpose(0, 2, 1, 3).reshape(h, w)
     
-    return error_map_final, (ctx_top, ctx_left)
+    return error_map_final
 
-def decompress_parallel_cpu(error_map, context_raw, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZE=16, original_shape=None):
-    #This function decompresses an image in parallel from its error map and raw context
+def decompress_parallel_cpu(error_map, block_size=16, learning_rate=0.5, FIXED_INPUT_SIZE=16, original_shape=None):
+    #This function decompresses an image in parallel from its error map
     #Input arguments:
-    #error_map: stored residual map
-    #context_raw: tuple containing raw top and left context pixels
+    #error_map: stored residual map (the context pixels travel inside it)
     #block_size: processing block size
     #learning_rate: learning rate for R2Net
     #FIXED_INPUT_SIZE: context vector size
@@ -194,7 +194,6 @@ def decompress_parallel_cpu(error_map, context_raw, block_size=16, learning_rate
     #Output:
     #reconstructed_img: final reconstructed image cropped to its original size
     
-    rec_top, rec_left = context_raw
     DTYPE = error_map.dtype
     h, w = error_map.shape
     b = block_size
@@ -202,6 +201,10 @@ def decompress_parallel_cpu(error_map, context_raw, block_size=16, learning_rate
     # Block reshaping
     err_blocks = error_map.reshape(h // b, b, w // b, b).transpose(0, 2, 1, 3).reshape(-1, b, b)
     N = err_blocks.shape[0]
+    
+    # Raw context stored by the encoder in the first row and column of every block
+    rec_top = err_blocks[:, 0, :].copy()
+    rec_left = err_blocks[:, :, 0].copy()
     
     # Context mapping and downsampling
     all_pixels = np.concatenate([rec_left, rec_top[:, 1:]], axis=1)
