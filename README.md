@@ -1,5 +1,7 @@
 # R2-Net on CUDA
 
+[![CI](https://github.com/ablesarodriguez/r2net-cuda/actions/workflows/ci.yml/badge.svg)](https://github.com/ablesarodriguez/r2net-cuda/actions/workflows/ci.yml)
+
 **GPU acceleration of an AI-based lossless image compression technique.**
 
 Bachelor's thesis (TFG) in Computer Engineering — Universitat Autònoma de Barcelona, 2025/26.
