@@ -2,6 +2,7 @@ numpy
 matplotlib
 jupyter
 pandas
+psutil
 
 # GPU coders only (needs an NVIDIA GPU and CUDA Toolkit 12.x):
 # cupy-cuda12x
